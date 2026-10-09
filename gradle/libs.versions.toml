@@ -6,7 +6,7 @@ espressoCore = "3.6.1"
 junit = "4.13.2"
 junitVersion = "1.2.1"
 kotlin = "2.2.21"
-ksp = "2.2.21-2.0.5" # Corrected matching version for Kotlin 2.2.21
+ksp = "2.3.6" # Modern KSP version with AGP 9 built-in Kotlin support
 material = "1.12.0"
 geckoview = "137.0.20250219093841"
 composeBom = "2025.01.00"
@@ -21,15 +21,12 @@ androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "j
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 material = { group = "com.google.android.material", name = "material", version.ref = "material" }
 
-# Target the specific ARM64-v8a build for your device
 geckoview = { group = "org.mozilla.geckoview", name = "geckoview-nightly-arm64-v8a", version.ref = "geckoview" }
 
-# Room Database Libraries
 androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
 
-# Compose BOM and UI libraries
 androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
 androidx-compose-ui = { group = "androidx.compose.ui", name = "ui" }
 androidx-compose-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
