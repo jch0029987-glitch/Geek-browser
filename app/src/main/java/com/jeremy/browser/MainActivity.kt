@@ -13,7 +13,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.automirrored.filled.History
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -141,10 +141,10 @@ fun BrowserScreen(
                     )
                 },
                 actions = {
-                    // History Button
+                    // History Button (Uses standard History Icon)
                     IconButton(onClick = { showHistoryDialog = true }) {
                         Icon(
-                            imageVector = Icons.AutoMirrored.Filled.History,
+                            imageVector = Icons.Default.History,
                             contentDescription = "Browsing History"
                         )
                     }
