@@ -49,16 +49,12 @@ jobs:
           NEW_TAG="v$NEW_VERSION"
 
           echo "tag=$NEW_TAG" >> $GITHUB_OUTPUT
-          
-          # Export so python can access it via os.environ
           export NEW_VERSION
 
           python3 -c '
           import re, os
           new_ver = os.environ["NEW_VERSION"]
           path = "app/build.gradle.kts"
-          if not os.path.exists(path):
-              path = "app/build.gradle"
 
           with open(path, "r") as f:
               content = f.read()
@@ -78,7 +74,7 @@ jobs:
               f.write(content)
           '
 
-          git add app/build.gradle.kts app/build.gradle || true
+          git add app/build.gradle.kts
           git commit -m "Bump version to $NEW_TAG [skip ci]"
           git tag "$NEW_TAG"
           git push origin ${{ github.ref_name }} --tags
