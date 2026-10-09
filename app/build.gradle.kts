@@ -89,6 +89,13 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.activity.compose)
+    
+    // Material Icons Extended (Provides Icons.Default.History)
+    implementation("androidx.compose.material:material-icons-extended")
+
+    // Security Encrypted Preferences
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+
     debugImplementation(libs.androidx.compose.ui.tooling)
 
     testImplementation(libs.junit)
