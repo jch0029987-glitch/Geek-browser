@@ -42,7 +42,7 @@ class MainActivity : ComponentActivity() {
 
         val runtime = (application as BrowserApplication).geckoRuntime
         val historyDao = AppDatabase.getDatabase(applicationContext).historyDao()
-        
+
         geckoSession = GeckoSession().apply {
             open(runtime)
             loadUri("https://duckduckgo.com")
@@ -82,7 +82,7 @@ fun BrowserScreen(
 ) {
     val keyboardController = LocalSoftwareKeyboardController.current
     val coroutineScope = rememberCoroutineScope()
-    
+
     var urlInput by remember { mutableStateOf("https://duckduckgo.com") }
     var showSettingsDialog by remember { mutableStateOf(false) }
     var showHistoryDialog by remember { mutableStateOf(false) }
@@ -204,8 +204,13 @@ fun BrowserScreen(
             )
         }
 
-        // Mount In-App Update Dialog
-        UpdateDialog(viewModel = updateViewModel)
+        // Mount In-App Update Dialog with parameter fix
+        UpdateDialog(
+            viewModel = updateViewModel,
+            onDismiss = {
+                updateViewModel.dismiss()
+            }
+        )
 
         // Proxy Settings Dialog
         if (showSettingsDialog) {
