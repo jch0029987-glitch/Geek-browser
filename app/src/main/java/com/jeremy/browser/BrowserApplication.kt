@@ -12,33 +12,30 @@ class BrowserApplication : Application() {
     override fun onCreate() {
         super.onCreate()
 
-        // Initialize runtime cleanly with standard settings
-        val settings = GeckoRuntimeSettings.Builder()
+        val settingsBuilder = GeckoRuntimeSettings.Builder()
             .aboutConfigEnabled(true)
-            .build()
 
-        geckoRuntime = GeckoRuntime.create(this, settings)
-
-        // Apply SOCKS5 proxy dynamically via GeckoPreferenceController if enabled
         if (ProxySettingsManager.isEnabled(this)) {
             val host = ProxySettingsManager.getHost(this) // "127.0.0.1"
             val port = ProxySettingsManager.getPort(this) // 9050
-            applySocksProxy(host, port)
-        }
-    }
 
-    private fun applySocksProxy(host: String, port: Int) {
-        try {
-            val prefs = geckoRuntime.preferenceController
-            prefs.set("network.proxy.type", 1)
-            prefs.set("network.proxy.socks", host)
-            prefs.set("network.proxy.socks_port", port)
-            prefs.set("network.proxy.socks_version", 5)
-            prefs.set("network.proxy.socks_remote_dns", true)
-            
-            Log.d("BrowserApp", "SOCKS5 proxy successfully configured for $host:$port")
-        } catch (e: Exception) {
-            Log.e("BrowserApp", "Failed to apply SOCKS proxy preferences", e)
+            // Safely pass network proxy settings via arguments array
+            try {
+                settingsBuilder.arguments(
+                    arrayOf(
+                        "-setpref", "network.proxy.type=1",
+                        "-setpref", "network.proxy.socks=$host",
+                        "-setpref", "network.proxy.socks_port=$port",
+                        "-setpref", "network.proxy.socks_version=5",
+                        "-setpref", "network.proxy.socks_remote_dns=true"
+                    )
+                )
+            } catch (e: Exception) {
+                Log.e("BrowserApp", "Failed to set proxy arguments", e)
+            }
         }
+
+        // Initialize runtime cleanly
+        geckoRuntime = GeckoRuntime.create(this, settingsBuilder.build())
     }
 }
