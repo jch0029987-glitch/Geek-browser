@@ -15,9 +15,10 @@ class BrowserApplication : Application() {
             .aboutConfigEnabled(true)
 
         if (ProxySettingsManager.isEnabled(this)) {
-            val host = ProxySettingsManager.getHost(this) // e.g. "127.0.0.1"
-            val port = ProxySettingsManager.getPort(this) // e.g. 9050
+            val host = ProxySettingsManager.getHost(this) // "127.0.0.1"
+            val port = ProxySettingsManager.getPort(this) // 9050
 
+            // Official argument token mapping for Gecko's preference engine
             settingsBuilder.arguments(
                 arrayOf(
                     "-setpref", "network.proxy.type=1",
