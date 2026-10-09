@@ -18,8 +18,15 @@ class BrowserApplication : Application() {
             val host = ProxySettingsManager.getHost(this) // e.g. "127.0.0.1"
             val port = ProxySettingsManager.getPort(this) // e.g. 9050
 
-            // Configure GeckoRuntime for SOCKS proxy (Orbot)
-            settingsBuilder.socksProxy(host, port)
+            settingsBuilder.arguments(
+                arrayOf(
+                    "-setpref", "network.proxy.type=1",
+                    "-setpref", "network.proxy.socks=$host",
+                    "-setpref", "network.proxy.socks_port=$port",
+                    "-setpref", "network.proxy.socks_version=5",
+                    "-setpref", "network.proxy.socks_remote_dns=true"
+                )
+            )
         }
 
         geckoRuntime = GeckoRuntime.create(this, settingsBuilder.build())
