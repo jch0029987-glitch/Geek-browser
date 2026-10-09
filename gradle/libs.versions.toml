@@ -6,7 +6,7 @@ espressoCore = "3.6.1"
 junit = "4.13.2"
 junitVersion = "1.2.1"
 kotlin = "2.2.21"
-ksp = "2.3.6" # Modern KSP version with AGP 9 built-in Kotlin support
+ksp = "2.2.21-1.0.31" # Must match the Kotlin version prefix
 material = "1.12.0"
 geckoview = "137.0.20250219093841"
 composeBom = "2025.01.00"
@@ -40,3 +40,4 @@ android-application = { id = "com.android.application", version.ref = "agp" }
 compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+
