@@ -13,7 +13,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.automirrored.filled.History
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -26,7 +26,6 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.jeremy.browser.data.AppDatabase
 import com.jeremy.browser.data.HistoryDao
 import com.jeremy.browser.data.HistoryEntity
-import kotlinx.coroutines.flow.collectAsState
 import kotlinx.coroutines.launch
 import org.mozilla.geckoview.GeckoSession
 import org.mozilla.geckoview.GeckoView
@@ -145,7 +144,7 @@ fun BrowserScreen(
                     // History Button
                     IconButton(onClick = { showHistoryDialog = true }) {
                         Icon(
-                            imageVector = Icons.Default.History,
+                            imageVector = Icons.AutoMirrored.Filled.History,
                             contentDescription = "Browsing History"
                         )
                     }
@@ -254,7 +253,7 @@ fun BrowserScreen(
                 onDismissRequest = { showHistoryDialog = false },
                 title = { Text("Browsing History") },
                 text = {
-                    Box(modifier = Modifier.height(300px.dp).fillMaxWidth()) {
+                    Box(modifier = Modifier.height(300.dp).fillMaxWidth()) {
                         if (historyList.isEmpty()) {
                             Text("No history recorded yet.", modifier = Modifier.align(Alignment.Center))
                         } else {
