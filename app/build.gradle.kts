@@ -1,7 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.compose.compiler)
-    id("com.google.devtools.ksp") version "2.0.0-1.22"
+    alias(libs.plugins.ksp)
 }
 
 android {
@@ -77,11 +77,10 @@ dependencies {
     // GeckoView Engine Dependency
     implementation(libs.geckoview)
 
-    // Room Database Dependencies
-    val roomVersion = "2.6.1"
-    implementation("androidx.room:room-runtime:$roomVersion")
-    implementation("androidx.room:room-ktx:$roomVersion")
-    ksp("androidx.room:room-compiler:$roomVersion")
+    // Room Database Dependencies via Version Catalog
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
+    ksp(libs.androidx.room.compiler)
 
     // Jetpack Compose (via BOM)
     implementation(platform(libs.androidx.compose.bom))
