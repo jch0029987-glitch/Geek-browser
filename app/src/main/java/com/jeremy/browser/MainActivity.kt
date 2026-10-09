@@ -15,6 +15,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -23,9 +24,12 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.jeremy.browser.data.AppDatabase
 import com.jeremy.browser.data.HistoryDao
 import com.jeremy.browser.data.HistoryEntity
+import com.jeremy.browser.update.UpdateDialog
+import com.jeremy.browser.update.UpdateViewModel
 import kotlinx.coroutines.launch
 import org.mozilla.geckoview.GeckoSession
 import org.mozilla.geckoview.GeckoView
@@ -73,7 +77,8 @@ class MainActivity : ComponentActivity() {
 fun BrowserScreen(
     session: GeckoSession,
     activity: ComponentActivity,
-    historyDao: HistoryDao
+    historyDao: HistoryDao,
+    updateViewModel: UpdateViewModel = viewModel()
 ) {
     val keyboardController = LocalSoftwareKeyboardController.current
     val coroutineScope = rememberCoroutineScope()
@@ -141,7 +146,14 @@ fun BrowserScreen(
                     )
                 },
                 actions = {
-                    // History Button (Uses standard History Icon)
+                    // Check for Updates Button
+                    IconButton(onClick = { updateViewModel.checkForUpdate() }) {
+                        Icon(
+                            imageVector = Icons.Default.SystemUpdate,
+                            contentDescription = "Check for Updates"
+                        )
+                    }
+                    // History Button
                     IconButton(onClick = { showHistoryDialog = true }) {
                         Icon(
                             imageVector = Icons.Default.History,
@@ -191,6 +203,9 @@ fun BrowserScreen(
                 }
             )
         }
+
+        // Mount In-App Update Dialog
+        UpdateDialog(viewModel = updateViewModel)
 
         // Proxy Settings Dialog
         if (showSettingsDialog) {
