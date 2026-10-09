@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.compose.compiler)
+    id("com.google.devtools.ksp") version "2.0.0-1.22"
 }
 
 android {
@@ -21,6 +22,18 @@ android {
         }
     }
 
+    signingConfigs {
+        create("release") {
+            val keystorePasswordEnv = System.getenv("KEYSTORE_PASSWORD")
+            if (keystorePasswordEnv != null) {
+                storeFile = file("release.jks")
+                storePassword = keystorePasswordEnv
+                keyAlias = System.getenv("KEY_ALIAS")
+                keyPassword = System.getenv("KEY_PASSWORD")
+            }
+        }
+    }
+
     packaging {
         jniLibs {
             useLegacyPackaging = true
@@ -30,6 +43,9 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = false
+            if (System.getenv("KEYSTORE_PASSWORD") != null) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -60,6 +76,12 @@ dependencies {
 
     // GeckoView Engine Dependency
     implementation(libs.geckoview)
+
+    // Room Database Dependencies
+    val roomVersion = "2.6.1"
+    implementation("androidx.room:room-runtime:$roomVersion")
+    implementation("androidx.room:room-ktx:$roomVersion")
+    ksp("androidx.room:room-compiler:$roomVersion")
 
     // Jetpack Compose (via BOM)
     implementation(platform(libs.androidx.compose.bom))
