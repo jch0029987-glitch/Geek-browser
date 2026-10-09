@@ -11,8 +11,8 @@ interface HistoryDao {
     fun getAllHistory(): Flow<List<HistoryEntity>>
 
     @Insert
-    suspend fun insertHistory(history: HistoryEntity)
+    suspend fun insertHistory(history: HistoryEntity): Long
 
     @Query("DELETE FROM history")
-    suspend fun clearHistory()
+    suspend fun clearHistory(): Int
 }
