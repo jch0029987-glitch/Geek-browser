@@ -6,11 +6,14 @@ import android.util.Patterns
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -20,6 +23,11 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.jeremy.browser.data.AppDatabase
+import com.jeremy.browser.data.HistoryDao
+import com.jeremy.browser.data.HistoryEntity
+import kotlinx.coroutines.flow.collectAsState
+import kotlinx.coroutines.launch
 import org.mozilla.geckoview.GeckoSession
 import org.mozilla.geckoview.GeckoView
 
@@ -30,6 +38,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         val runtime = (application as BrowserApplication).geckoRuntime
+        val historyDao = AppDatabase.getDatabase(applicationContext).historyDao()
         
         geckoSession = GeckoSession().apply {
             open(runtime)
@@ -42,7 +51,11 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    BrowserScreen(session = geckoSession, activity = this)
+                    BrowserScreen(
+                        session = geckoSession,
+                        activity = this,
+                        historyDao = historyDao
+                    )
                 }
             }
         }
@@ -58,17 +71,27 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun BrowserScreen(session: GeckoSession, activity: ComponentActivity) {
+fun BrowserScreen(
+    session: GeckoSession,
+    activity: ComponentActivity,
+    historyDao: HistoryDao
+) {
     val keyboardController = LocalSoftwareKeyboardController.current
+    val coroutineScope = rememberCoroutineScope()
+    
     var urlInput by remember { mutableStateOf("https://duckduckgo.com") }
     var showSettingsDialog by remember { mutableStateOf(false) }
+    var showHistoryDialog by remember { mutableStateOf(false) }
 
     val context = activity.applicationContext
     var proxyEnabled by remember { mutableStateOf(ProxySettingsManager.isEnabled(context)) }
     var proxyHost by remember { mutableStateOf(ProxySettingsManager.getHost(context)) }
     var proxyPort by remember { mutableStateOf(ProxySettingsManager.getPort(context).toString()) }
 
-    // Keep the address bar synced when pages change internally (e.g. following links)
+    // Observe room database history list
+    val historyList by historyDao.getAllHistory().collectAsState(initial = emptyList())
+
+    // Keep address bar synced and record history when page navigation occurs
     DisposableEffect(session) {
         session.navigationDelegate = object : GeckoSession.NavigationDelegate {
             override fun onLocationChange(
@@ -77,7 +100,12 @@ fun BrowserScreen(session: GeckoSession, activity: ComponentActivity) {
                 perms: MutableList<GeckoSession.PermissionDelegate.ContentPermission>,
                 hasUserGesture: Boolean
             ) {
-                url?.let { urlInput = it }
+                url?.let {
+                    urlInput = it
+                    coroutineScope.launch {
+                        historyDao.insertHistory(HistoryEntity(url = it, title = it))
+                    }
+                }
             }
         }
 
@@ -114,6 +142,14 @@ fun BrowserScreen(session: GeckoSession, activity: ComponentActivity) {
                     )
                 },
                 actions = {
+                    // History Button
+                    IconButton(onClick = { showHistoryDialog = true }) {
+                        Icon(
+                            imageVector = Icons.Default.History,
+                            contentDescription = "Browsing History"
+                        )
+                    }
+                    // Proxy Settings Button
                     IconButton(onClick = { showSettingsDialog = true }) {
                         Icon(
                             imageVector = Icons.Default.Settings,
@@ -147,8 +183,8 @@ fun BrowserScreen(session: GeckoSession, activity: ComponentActivity) {
         ) {
             AndroidView(
                 modifier = Modifier.fillMaxSize(),
-                factory = { context ->
-                    GeckoView(context).apply {
+                factory = { ctx ->
+                    GeckoView(ctx).apply {
                         setSession(session)
                         isFocusable = true
                         isFocusableInTouchMode = true
@@ -157,6 +193,7 @@ fun BrowserScreen(session: GeckoSession, activity: ComponentActivity) {
             )
         }
 
+        // Proxy Settings Dialog
         if (showSettingsDialog) {
             AlertDialog(
                 onDismissRequest = { showSettingsDialog = false },
@@ -206,6 +243,53 @@ fun BrowserScreen(session: GeckoSession, activity: ComponentActivity) {
                 dismissButton = {
                     TextButton(onClick = { showSettingsDialog = false }) {
                         Text("Cancel")
+                    }
+                }
+            )
+        }
+
+        // History Drawer/Dialog
+        if (showHistoryDialog) {
+            AlertDialog(
+                onDismissRequest = { showHistoryDialog = false },
+                title = { Text("Browsing History") },
+                text = {
+                    Box(modifier = Modifier.height(300px.dp).fillMaxWidth()) {
+                        if (historyList.isEmpty()) {
+                            Text("No history recorded yet.", modifier = Modifier.align(Alignment.Center))
+                        } else {
+                            LazyColumn(modifier = Modifier.fillMaxSize()) {
+                                items(historyList) { item ->
+                                    Card(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 4.dp),
+                                        onClick = {
+                                            session.loadUri(item.url)
+                                            showHistoryDialog = false
+                                        }
+                                    ) {
+                                        Column(modifier = Modifier.padding(8.dp)) {
+                                            Text(text = item.url, style = MaterialTheme.typography.bodyMedium)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        coroutineScope.launch {
+                            historyDao.clearHistory()
+                        }
+                    }) {
+                        Text("Clear All", color = MaterialTheme.colorScheme.error)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showHistoryDialog = false }) {
+                        Text("Close")
                     }
                 }
             )
