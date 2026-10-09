@@ -1,5 +1,6 @@
 package com.jeremy.browser
 
+import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.util.Patterns
@@ -276,9 +277,13 @@ fun BrowserScreen(
                         ProxySettingsManager.saveSettings(context, proxyEnabled, proxyHost, portInt)
                         showSettingsDialog = false
 
-                        val intent = activity.intent
-                        activity.finish()
-                        activity.startActivity(intent)
+                        // Force full application process restart so GeckoRuntime re-initializes with proxy settings
+                        val packageManager = activity.packageManager
+                        val intent = packageManager.getLaunchIntentForPackage(activity.packageName)
+                        val componentName = intent?.component
+                        val restartIntent = Intent.makeRestartActivityTask(componentName)
+                        activity.startActivity(restartIntent)
+                        Runtime.getRuntime().exit(0)
                     }) {
                         Text("Save & Restart")
                     }
@@ -291,7 +296,7 @@ fun BrowserScreen(
             )
         }
 
-        // History Drawer/Dialog
+        // History Dialog
         if (showHistoryDialog) {
             AlertDialog(
                 onDismissRequest = { showHistoryDialog = false },
