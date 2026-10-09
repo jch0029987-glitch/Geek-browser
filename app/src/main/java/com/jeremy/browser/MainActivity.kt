@@ -14,6 +14,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material3.*
@@ -28,25 +29,22 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.jeremy.browser.data.AppDatabase
 import com.jeremy.browser.data.HistoryDao
 import com.jeremy.browser.data.HistoryEntity
+import com.jeremy.browser.tabs.TabSwitcherBottomSheet
+import com.jeremy.browser.tabs.TabViewModel
 import com.jeremy.browser.update.UpdateDialog
 import com.jeremy.browser.update.UpdateViewModel
 import kotlinx.coroutines.launch
-import org.mozilla.geckoview.GeckoSession
+import org.mozilla.geckoview.GeckoRuntime
 import org.mozilla.geckoview.GeckoView
 
 class MainActivity : ComponentActivity() {
-    private lateinit var geckoSession: GeckoSession
+    private lateinit var geckoRuntime: GeckoRuntime
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val runtime = (application as BrowserApplication).geckoRuntime
+        geckoRuntime = (application as BrowserApplication).geckoRuntime
         val historyDao = AppDatabase.getDatabase(applicationContext).historyDao()
-
-        geckoSession = GeckoSession().apply {
-            open(runtime)
-            loadUri("https://duckduckgo.com")
-        }
 
         setContent {
             MaterialTheme {
@@ -55,7 +53,7 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     BrowserScreen(
-                        session = geckoSession,
+                        runtime = geckoRuntime,
                         activity = this,
                         historyDao = historyDao
                     )
@@ -63,27 +61,21 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        if (::geckoSession.isInitialized) {
-            geckoSession.close()
-        }
-    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BrowserScreen(
-    session: GeckoSession,
+    runtime: GeckoRuntime,
     activity: ComponentActivity,
     historyDao: HistoryDao,
-    updateViewModel: UpdateViewModel = viewModel()
+    updateViewModel: UpdateViewModel = viewModel(),
+    tabViewModel: TabViewModel = viewModel()
 ) {
     val keyboardController = LocalSoftwareKeyboardController.current
     val coroutineScope = rememberCoroutineScope()
 
-    var urlInput by remember { mutableStateOf("https://duckduckgo.com") }
+    var showTabSwitcher by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
     var showHistoryDialog by remember { mutableStateOf(false) }
 
@@ -92,30 +84,24 @@ fun BrowserScreen(
     var proxyHost by remember { mutableStateOf(ProxySettingsManager.getHost(context)) }
     var proxyPort by remember { mutableStateOf(ProxySettingsManager.getPort(context).toString()) }
 
+    // Initialize default tab on startup
+    LaunchedEffect(Unit) {
+        tabViewModel.initDefaultTab(runtime) { url, title ->
+            coroutineScope.launch {
+                historyDao.insertHistory(HistoryEntity(url = url, title = title))
+            }
+        }
+    }
+
+    val activeTab = tabViewModel.activeTab
+    var urlInput by remember(activeTab?.url) { mutableStateOf(activeTab?.url ?: "https://duckduckgo.com") }
+
     // Observe room database history list
     val historyList by historyDao.getAllHistory().collectAsState(initial = emptyList())
 
-    // Keep address bar synced and record history when page navigation occurs
-    DisposableEffect(session) {
-        session.navigationDelegate = object : GeckoSession.NavigationDelegate {
-            override fun onLocationChange(
-                s: GeckoSession,
-                url: String?,
-                perms: MutableList<GeckoSession.PermissionDelegate.ContentPermission>,
-                hasUserGesture: Boolean
-            ) {
-                url?.let {
-                    urlInput = it
-                    coroutineScope.launch {
-                        historyDao.insertHistory(HistoryEntity(url = it, title = it))
-                    }
-                }
-            }
-        }
-
-        onDispose {
-            session.navigationDelegate = null
-        }
+    // Keep address bar synced with active tab updates
+    LaunchedEffect(activeTab?.url) {
+        activeTab?.url?.let { urlInput = it }
     }
 
     Scaffold(
@@ -139,13 +125,28 @@ fun BrowserScreen(
                                 } else {
                                     "https://duckduckgo.com/?q=${Uri.encode(urlInput)}"
                                 }
-                                session.loadUri(target)
+                                activeTab?.session?.loadUri(target)
                                 keyboardController?.hide()
                             }
                         )
                     )
                 },
                 actions = {
+                    // Tab Switcher Button with count badge
+                    IconButton(onClick = { showTabSwitcher = true }) {
+                        BadgedBox(
+                            badge = {
+                                if (tabViewModel.tabs.isNotEmpty()) {
+                                    Badge { Text("${tabViewModel.tabs.size}") }
+                                }
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Layers,
+                                contentDescription = "Tabs"
+                            )
+                        }
+                    }
                     // Check for Updates Button
                     IconButton(onClick = { updateViewModel.checkForUpdate() }) {
                         Icon(
@@ -177,10 +178,10 @@ fun BrowserScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
-                    IconButton(onClick = { session.goBack() }) {
+                    IconButton(onClick = { activeTab?.session?.goBack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
-                    IconButton(onClick = { session.goForward() }) {
+                    IconButton(onClick = { activeTab?.session?.goForward() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Forward")
                     }
                 }
@@ -192,19 +193,42 @@ fun BrowserScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            AndroidView(
-                modifier = Modifier.fillMaxSize(),
-                factory = { ctx ->
-                    GeckoView(ctx).apply {
-                        setSession(session)
-                        isFocusable = true
-                        isFocusableInTouchMode = true
+            activeTab?.let { tab ->
+                AndroidView(
+                    modifier = Modifier.fillMaxSize(),
+                    factory = { ctx ->
+                        GeckoView(ctx).apply {
+                            setSession(tab.session)
+                            isFocusable = true
+                            isFocusableInTouchMode = true
+                        }
+                    },
+                    update = { view ->
+                        if (view.session != tab.session) {
+                            view.setSession(tab.session)
+                        }
                     }
-                }
+                )
+            }
+        }
+
+        // Tab Switcher Bottom Sheet
+        if (showTabSwitcher) {
+            TabSwitcherBottomSheet(
+                viewModel = tabViewModel,
+                onNewTab = {
+                    tabViewModel.createNewTab(runtime, { url, title ->
+                        coroutineScope.launch {
+                            historyDao.insertHistory(HistoryEntity(url = url, title = title))
+                        }
+                    })
+                    showTabSwitcher = false
+                },
+                onDismiss = { showTabSwitcher = false }
             )
         }
 
-        // Mount In-App Update Dialog with parameter fix
+        // Mount In-App Update Dialog
         UpdateDialog(
             viewModel = updateViewModel,
             onDismiss = {
@@ -284,7 +308,7 @@ fun BrowserScreen(
                                             .fillMaxWidth()
                                             .padding(vertical = 4.dp),
                                         onClick = {
-                                            session.loadUri(item.url)
+                                            activeTab?.session?.loadUri(item.url)
                                             showHistoryDialog = false
                                         }
                                     ) {
