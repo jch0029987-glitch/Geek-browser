@@ -28,9 +28,14 @@ class TabViewModel : ViewModel() {
         val session = GeckoSession().apply {
             open(runtime)
             navigationDelegate = object : GeckoSession.NavigationDelegate {
-                onLocationChange(s: GeckoSession, url: String?, perms: MutableList<GeckoSession.PermissionDelegate.ContentPermission>, hasUserGesture: Boolean) {
+                override fun onLocationChange(
+                    session: GeckoSession,
+                    url: String?,
+                    perms: MutableList<GeckoSession.PermissionDelegate.ContentPermission>,
+                    hasUserGesture: Boolean
+                ) {
                     url?.let { newUrl ->
-                        _tabs.find { it.session == s }?.let { tab ->
+                        _tabs.find { it.session == session }?.let { tab ->
                             tab.url = newUrl
                             tab.title = newUrl
                         }
