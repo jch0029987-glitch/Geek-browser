@@ -1,0 +1,138 @@
+name: Build Signed Android APK and Release
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Required for committing version bumps, tags, and creating GitHub releases
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Required to parse git tags and history
+
+      - name: Check for Bot Commit Loop
+        id: commit_check
+        run: |
+          MSG=$(git log -1 --pretty=%B)
+          if [[ "$MSG" == *"Bump version to"* ]]; then
+            echo "Skipping automated release for bot version bump commit."
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            MSG="${MSG//'%'/'%25'}"
+            MSG="${MSG//$'\n'/'%0A'}"
+            MSG="${MSG//$'\r'/'%0D'}"
+            echo "message=$MSG" >> $GITHUB_OUTPUT
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Auto-increment Version & Update build.gradle.kts
+        if: github.event_name == 'push' && steps.commit_check.outputs.skip == 'false'
+        id: version_bump
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v1.0.0")
+          VERSION_NUM=${LATEST_TAG#v}
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION_NUM"
+          PATCH=$((PATCH + 1))
+          NEW_VERSION="$MAJOR.$MINOR.$PATCH"
+          NEW_TAG="v$NEW_VERSION"
+
+          echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
+          echo "tag=$NEW_TAG" >> $GITHUB_OUTPUT
+
+          python3 -c '
+          import re, os
+          new_ver = os.environ["NEW_VERSION"]
+          path = "app/build.gradle.kts"
+          if not os.path.exists(path):
+              path = "app/build.gradle"
+
+          with open(path, "r") as f:
+              content = f.read()
+
+          vc_match = re.search(r"versionCode\s*=\s*(\d+)", content)
+          if not vc_match:
+              vc_match = re.search(r"versionCode\s+(\d+)", content)
+          current_vc = int(vc_match.group(1)) if vc_match else 1
+          new_vc = current_vc + 1
+
+          content = re.sub(r"versionName\s*=\s*\"[^\"]*\"", f"versionName = \"{new_ver}\"", content)
+          content = re.sub(r"versionName\s+\"[^\"]*\"", f"versionName \"{new_ver}\"", content)
+          content = re.sub(r"versionCode\s*=\s*\d+", f"versionCode = {new_vc}", content)
+          content = re.sub(r"versionCode\s+\d+", f"versionCode {new_vc}", content)
+
+          with open(path, "w") as f:
+              f.write(content)
+          '
+
+          git add app/build.gradle.kts app/build.gradle || true
+          git commit -m "Bump version to $NEW_TAG [skip ci]"
+          git tag "$NEW_TAG"
+          git push origin ${{ github.ref_name }} --tags
+
+      - name: Set up JDK 17
+        if: steps.commit_check.outputs.skip == 'false'
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Decode Keystore
+        if: steps.commit_check.outputs.skip == 'false'
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > ${{ github.workspace }}/app/release.jks
+
+      - name: Grant execute permission for gradlew
+        if: steps.commit_check.outputs.skip == 'false'
+        run: chmod +x gradlew
+
+      - name: Cache Gradle packages
+        if: steps.commit_check.outputs.skip == 'false'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Build Signed Release APK
+        if: steps.commit_check.outputs.skip == 'false'
+        env:
+          KEYSTORE_FILE_PATH: "release.jks"
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: ./gradlew assembleRelease
+
+      - name: Upload Signed Release APK Artifact
+        if: steps.commit_check.outputs.skip == 'false'
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release
+          path: app/build/outputs/apk/release/app-release.apk
+
+      - name: Create GitHub Release and Publish APK
+        if: github.event_name == 'push' && steps.commit_check.outputs.skip == 'false'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version_bump.outputs.tag }}
+          name: "Release ${{ steps.version_bump.outputs.tag }}"
+          files: app/build/outputs/apk/release/app-release.apk
+          body: |
+            ### Update Notes
+            ${{ steps.commit_check.outputs.message }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
